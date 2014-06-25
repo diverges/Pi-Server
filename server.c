@@ -12,13 +12,19 @@ server.c: stream socket echo server.
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <signal.h>
 
-#define PORT "2525"
+#define PORT        "2525"
+#define BACKLOG     5
+#define BUFFER_SIZE 128
 
 // Functions
+void sigchld_handler(int s);
 void *get_in_addr(struct sockaddr *sa);
+void run(char* s, int new_fd);
 
 int main()
 {
@@ -46,6 +52,8 @@ int main()
         return 1;
     }
 
+    printf("Initializing server...\n");
+
     // Setup and bind a socket
     for(p = servinfo; p != NULL; p = p->ai_next)
     {
@@ -64,6 +72,8 @@ int main()
             perror("setsockopt");
             exit(1);
         }
+
+        printf("Binding socket...\n");
 
         // Bind socket
         if(bind(sockfd, p->ai_addr, p->ai_addrlen) == -1)
@@ -85,7 +95,7 @@ int main()
     freeaddrinfo(servinfo);
 
     // Listen on socket
-    if(listen(sockfd, 2) == -1)
+    if(listen(sockfd, BACKLOG) == -1)
     {
         perror("listen");
         exit(1);
@@ -107,15 +117,68 @@ int main()
         inet_ntop(their_addr.ss_family, 
             get_in_addr((struct sockaddr *)&their_addr),
             s, sizeof s);
-        printf("server: got connection from %s\n", s);
 
         /* Handle connection Event */
-        if (send(new_fd, "Hello!\n", 7, 0) == -1) perror("send");
-        close(new_fd);
-        break;
+        if(!fork())
+        {
+            /* Child Process */
+            close(sockfd); // child does not need
+            run(s, new_fd); // should not return                      
+        }
+
+        close(new_fd); // parent does not need this
     }
     close(sockfd);
     return 0;
+}
+
+// run(char* s)
+// s: string representing remote ip
+// must close child socket, should not return
+void run(char* s, int new_fd)
+{
+    int n;
+    int cont;
+    char* parse;
+    char buf[BUFFER_SIZE];
+
+    printf("server: got connection from %s\n", s);
+    if (send(new_fd, "Welcome! Type 'exit' to terminate connection.\n", 46, 0) == -1) perror("send");
+    
+    /* Read Commands */
+    cont = 1;
+    while(cont != 0)
+    {
+        // clear buff
+        memset(&buf, 0, sizeof buf);
+        if((n = read(new_fd, buf, BUFFER_SIZE)) < 0) perror("read"); 
+        
+        parse = strtok(buf, " ");
+        if(parse != NULL)
+            printf("server: recieved command %s", buf);
+        
+        /* Translate Command */
+        //
+        // single word instructions must end in \r\n, see exit 
+        if(strcmp(parse, "exit\r\n") == 0) 
+        {        
+            printf("server: closing connection with %s\n", s);
+            cont = 0;
+        }   
+        else if (strcmp(parse, "echo") == 0)
+        {
+            parse = strtok(NULL, "");
+            printf("server: sending (%s): %s\n", s, parse);
+            if((n=write(new_fd, parse, strlen(parse))) < 0) perror("write");
+        }
+        else
+        {
+            printf("server: unknown command.\n");   
+        }
+    }
+
+    close(new_fd);
+    exit(0);
 }
 
 // Get socket address in IPv4 or IPv6:
@@ -125,5 +188,12 @@ void *get_in_addr(struct sockaddr *sa)
         return &(((struct sockaddr_in*)sa)->sin_addr);
 
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+
+// Reap zombies
+void sigchld_handler(int s)
+{
+    printf("server: sigchld called\n");
+    while(waitpid(-1, NULL, WNOHANG) > 0);
 }
 
