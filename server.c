@@ -33,6 +33,7 @@ int main()
     struct addrinfo hints, *servinfo, *p;
 
     // connectors information
+    struct sigaction sa;
     struct sockaddr_storage their_addr;
     socklen_t sin_size;
     char s[INET6_ADDRSTRLEN];
@@ -98,6 +99,14 @@ int main()
     if(listen(sockfd, BACKLOG) == -1)
     {
         perror("listen");
+        exit(1);
+    }
+
+    sa.sa_handler = sigchld_handler; // reap all dead processes
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+        perror("sigaction");
         exit(1);
     }
 
@@ -170,6 +179,18 @@ void run(char* s, int new_fd)
             parse = strtok(NULL, "");
             printf("server: sending (%s): %s\n", s, parse);
             if((n=write(new_fd, parse, strlen(parse))) < 0) perror("write");
+        }
+        else if (strcmp(parse, "exec\r\n") == 0)
+        {
+            printf("server: executing args.py\n");
+            if(!fork())
+            {
+                if(execlp("python", "python", "py/args.py", NULL, NULL) < 0)
+                {
+                    perror("execlp");
+                    exit(0);
+                }
+            }
         }
         else
         {
