@@ -164,8 +164,8 @@ void run(char* s, int new_fd)
         
         parse = strtok(buf, " ");
         if(parse != NULL)
-            printf("server: recieved command %s", buf);
-        
+            printf("server: recieved command %s\n", buf);
+       
         /* Translate Command */
         //
         // single word instructions must end in \r\n, see exit 
@@ -176,20 +176,30 @@ void run(char* s, int new_fd)
         }   
         else if (strcmp(parse, "echo") == 0)
         {
-            parse = strtok(NULL, "");
+            parse = strtok(NULL, " ");
             printf("server: sending (%s): %s\n", s, parse);
             if((n=write(new_fd, parse, strlen(parse))) < 0) perror("write");
         }
-        else if (strcmp(parse, "exec\r\n") == 0)
+        else if (strcmp(parse, "exec") == 0)
         {
-            printf("server: executing args.py\n");
-            if(!fork())
+            parse = strtok(NULL, " ");
+            if(parse != NULL)
             {
-                if(execlp("python", "python", "py/args.py", NULL, NULL) < 0)
+                printf("server: executing %s ", parse);
+                if(!fork())
                 {
-                    perror("execlp");
-                    exit(0);
+                    close(new_fd); // program won't need this
+                    if(execlp("python", "python", strtok(parse, "\r\n"), 
+                        NULL, NULL) < 0)
+                    {
+                        perror("execlp");
+                        exit(0);
+                    }
                 }
+            } 
+            else
+            {
+                printf("server: invalid use of exec\n");
             }
         }
         else
