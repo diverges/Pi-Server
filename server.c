@@ -185,12 +185,13 @@ void run(char* s, int new_fd)
             parse = strtok(NULL, " ");
             if(parse != NULL)
             {
-                printf("server: executing %s ", parse);
+                printf("server: executing %s with args- %s", 
+                    parse, (parse+strlen(parse)+1)); // QUESTIONABLE
                 if(!fork())
                 {
                     close(new_fd); // program won't need this
                     if(execlp("python", "python", strtok(parse, "\r\n"), 
-                        NULL, NULL) < 0)
+                        strtok((parse+strlen(parse)+1), "\r\n"), NULL) < 0)
                     {
                         perror("execlp");
                         exit(0);
