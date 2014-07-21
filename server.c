@@ -21,16 +21,16 @@ server.c: stream socket echo server.
 #include "jobs.h"
 
 
-#define PORT        	"2525"
-#define BACKLOG     	5
-#define BUFFER_SIZE 	128
-#define MAX_ARGUMENTS 	10
+#define PORT            "2525"
+#define BACKLOG         5
+#define BUFFER_SIZE     128
+#define MAX_ARGUMENTS   10
 
 // Thread Argument Struct
 struct run_args 
 {
-	char  command[INET6_ADDRSTRLEN];	/* client request */
-	int	  new_fd;						/* client socket  */
+    char  command[INET6_ADDRSTRLEN];    /* client request */
+    int   new_fd;                       /* client socket  */
 };
 
 // Job List
@@ -53,9 +53,9 @@ int main()
     char s[INET6_ADDRSTRLEN];
     int rv;
     int yes=1;
-	
-	struct sigaction sa;
-	sigset_t full_mask;
+    
+    struct sigaction sa;
+    sigset_t full_mask;
 
     // generate address hint
     memset(&hints, 0, sizeof hints);
@@ -117,31 +117,31 @@ int main()
         perror("listen");
         exit(1);
     }
-	
-	// sigchld handler
+    
+    // sigchld handler
     sigemptyset(&sa.sa_mask);
     sa.sa_handler = sigchld_handler;
-	sa.sa_flags = SA_RESTART;
+    sa.sa_flags = SA_RESTART;
     if (sigaction(SIGCHLD, &sa, NULL) == -1) {
         perror("sigaction");
         exit(1);
     }
 
-	// Block all signals
-	sigfillset(&full_mask);
-	pthread_sigmask(SIG_SETMASK, &full_mask, NULL);
-	
-	// job list
-	printf("server: preparing job list...\n");
-	initjobs(job_list);
+    // Block all signals
+    sigfillset(&full_mask);
+    pthread_sigmask(SIG_SETMASK, &full_mask, NULL);
+    
+    // job list
+    printf("server: preparing job list...\n");
+    initjobs(job_list);
 
     printf("server: waiting for connections... \n");
 
     // main accept() loop
     while(1)
     {
-		pthread_t thread_id;
-		struct run_args* r_args;
+        pthread_t thread_id;
+        struct run_args* r_args;
 
         sin_size = sizeof their_addr;
         new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
@@ -151,32 +151,32 @@ int main()
             continue;
         }
 
-	    inet_ntop(their_addr.ss_family, 
-        	get_in_addr((struct sockaddr *)&their_addr),
-        	s, sizeof s);
-		
-		/* Prepare Arguments */
-		printf("Allocating client space... \n");
-		// thread must free this
-		r_args = (struct run_args*) malloc(sizeof(struct run_args));
-		printf("Copying arguments...\n");
-		strcpy(r_args->command, s);
-		r_args->new_fd = new_fd;
-
-		printf("Splitting thread...\n");
+        inet_ntop(their_addr.ss_family, 
+            get_in_addr((struct sockaddr *)&their_addr),
+            s, sizeof s);
         
-		// Creates a new thread to handle connection event 
-		if(pthread_create(&thread_id, NULL, run, r_args) < 0)
-		{
-			perror("could not create thread");
-			exit(1);
-		}
-		if(pthread_detach(thread_id) < 0)
-		{
-			perror("detach error");
-			exit(1);
-		}
-		
+        /* Prepare Arguments */
+        printf("Allocating client space... \n");
+        // thread must free this
+        r_args = (struct run_args*) malloc(sizeof(struct run_args));
+        printf("Copying arguments...\n");
+        strcpy(r_args->command, s);
+        r_args->new_fd = new_fd;
+
+        printf("Splitting thread...\n");
+        
+        // Creates a new thread to handle connection event 
+        if(pthread_create(&thread_id, NULL, run, r_args) < 0)
+        {
+            perror("could not create thread");
+            exit(1);
+        }
+        if(pthread_detach(thread_id) < 0)
+        {
+            perror("detach error");
+            exit(1);
+        }
+        
     }
 
     close(sockfd);
@@ -188,28 +188,28 @@ int main()
 // must close child socket, should not return
 void *run(void* args)
 {
-	// load arguments
-	char* s = ((struct run_args*) args)->command;
-	int new_fd = (((struct run_args*) args)->new_fd);
+    // load arguments
+    char* s = ((struct run_args*) args)->command;
+    int new_fd = (((struct run_args*) args)->new_fd);
 
     int n, pid;
     int cont;
     char* parse;
     char buf[BUFFER_SIZE];
-	
-	sigset_t unblock_mask;
+    
+    sigset_t unblock_mask;
 
-	int argc; // argument count (#args + NULL + 1)
-	char* argv[MAX_ARGUMENTS]; // arguments
-	
-	// Initialize sigmasks
-	if(sigemptyset(&unblock_mask) < 0) exit(1);
-	if(sigaddset(&unblock_mask, SIGCHLD) < 0) exit(1);	
-	if(sigaddset(&unblock_mask, SIGINT) < 0) exit(1);
-	
-	// Unblock Signals blocked by main thread
-	if(pthread_sigmask(SIG_UNBLOCK, &unblock_mask, NULL) < 0)
-		printf("server: FAILED sigblock\n");
+    int argc; // argument count (#args + NULL + 1)
+    char* argv[MAX_ARGUMENTS]; // arguments
+    
+    // Initialize sigmasks
+    if(sigemptyset(&unblock_mask) < 0) exit(1);
+    if(sigaddset(&unblock_mask, SIGCHLD) < 0) exit(1);  
+    if(sigaddset(&unblock_mask, SIGINT) < 0) exit(1);
+    
+    // Unblock Signals blocked by main thread
+    if(pthread_sigmask(SIG_UNBLOCK, &unblock_mask, NULL) < 0)
+        printf("server: FAILED sigblock\n");
 
 
     printf("server: got connection from %s on socket %u.\n", s, new_fd);
@@ -222,126 +222,126 @@ void *run(void* args)
         // clear buff
         memset(&buf, '\0', sizeof buf);
         
-		// Read Input - TODO: Read until no input left?
-		if((n = read(new_fd, buf, BUFFER_SIZE)) < 0) perror("read"); 
+        // Read Input - TODO: Read until no input left?
+        if((n = read(new_fd, buf, BUFFER_SIZE)) < 0) perror("read"); 
         
-		// Parse first argument
-		parse = strtok(buf, " ");
+        // Parse first argument
+        parse = strtok(buf, " ");
         if(parse != NULL)
-		{
+        {
             printf("server: recieved command %s\n", buf);
         } 
-		else
-		{
-			/* Read and parse failed */
-			printf("Closing connection - freed %u\n", new_fd);
-			close(new_fd);
-			free(args);
-			pthread_exit((void *) 0);
-		}
+        else
+        {
+            /* Read and parse failed */
+            printf("Closing connection - freed %u\n", new_fd);
+            close(new_fd);
+            free(args);
+            pthread_exit((void *) 0);
+        }
 
-		// Parse remainder of arguments
-		argc = 1;
-		argv[0] = parse;	
-		while(parse != NULL)
-		{
-			parse = strtok(NULL, " ");
-			argv[argc] = parse;
-			argc++;
-		}
-		
-		if(argc > MAX_ARGUMENTS)
-		{
-			printf("server: too many arguments - %u\n", argc);
-			argv[0] = "echo";
-			argv[1] = "error";
-			argv[2] = NULL;
-			argc = 3;
-		}
-		else
-		{
-			// Clean last argument, removes "\r\n" at end
-			// Telnet adds those two
-			argv[argc-2][strlen(argv[argc-2])-2] = '\0'; 
-		}
-		
-		/**********************************************
-		 * Translate Command 
-		 **********************************************/
-		if(strcmp(argv[0], "exit") == 0) 
+        // Parse remainder of arguments
+        argc = 1;
+        argv[0] = parse;    
+        while(parse != NULL)
+        {
+            parse = strtok(NULL, " ");
+            argv[argc] = parse;
+            argc++;
+        }
+        
+        if(argc > MAX_ARGUMENTS)
+        {
+            printf("server: too many arguments - %u\n", argc);
+            argv[0] = "echo";
+            argv[1] = "error";
+            argv[2] = NULL;
+            argc = 3;
+        }
+        else
+        {
+            // Clean last argument, removes "\r\n" at end
+            // Telnet adds those two
+            argv[argc-2][strlen(argv[argc-2])-2] = '\0'; 
+        }
+        
+        /**********************************************
+         * Translate Command 
+         **********************************************/
+        if(strcmp(argv[0], "exit") == 0) 
         {        
-			// Exit
+            // Exit
 
             printf("server: closing connection with %s\n", s);
             cont = 0;
         }   
         else if (strcmp(argv[0], "echo") == 0)
         {
-			// Echo
+            // Echo
             printf("server: sending (%s)", s);
             for(n = 1; n < argc-1; n++)
-			{
-				if(((write(new_fd, argv[n], strlen(argv[n]))) < 0) ||
-				  	(write(new_fd, " ", 1) < 0))	
-				  	perror("write");
-        	}
-			if(write(new_fd, "\n", 1) < 0) perror("write");
-		}
+            {
+                if(((write(new_fd, argv[n], strlen(argv[n]))) < 0) ||
+                    (write(new_fd, " ", 1) < 0))    
+                    perror("write");
+            }
+            if(write(new_fd, "\n", 1) < 0) perror("write");
+        }
         else if ((strcmp(argv[0], "exec") == 0) && (argc > 1))
         {
-			// Block SIGCHLD to prevent job_list race condition
-			if(pthread_sigmask(SIG_BLOCK, &unblock_mask, NULL) < 0)
-				printf("server: FAILED sigblock\n");
+            // Block SIGCHLD to prevent job_list race condition
+            if(pthread_sigmask(SIG_BLOCK, &unblock_mask, NULL) < 0)
+                printf("server: FAILED sigblock\n");
 
-			//Exec - No pipe between parent and child
-			if(!(pid = fork()))
+            //Exec - No pipe between parent and child
+            if(!(pid = fork()))
             {
-				// Child
-				
-				if(pthread_sigmask(SIG_UNBLOCK, &unblock_mask, NULL) < 0)
-					printf("server: FAILED sigblock\n");
+                // Child
+                
+                if(pthread_sigmask(SIG_UNBLOCK, &unblock_mask, NULL) < 0)
+                    printf("server: FAILED sigblock\n");
 
-				close(new_fd); // program won't need this
-				free(args); // child won't need this
-				if(execv("/bin/python", argv) < 0)
+                close(new_fd); // program won't need this
+                free(args); // child won't need this
+                if(execv("/bin/python", argv) < 0)
                 {
                         perror("execlp");
                         exit(1);
                 }
-			}
-			// Parent - Adds child to job list
-			// assert: argc > 1
-			if(addjob(job_list, pid, argv[1]) == 0)	
-				printf("server: failed to add job.\n");
-			if(pthread_sigmask(SIG_UNBLOCK, &unblock_mask, NULL) < 0)
-					printf("server: FAILED sigblock\n");
+            }
+            // Parent - Adds child to job list
+            // assert: argc > 1
+            if(addjob(job_list, pid, argv[1]) == 0) 
+                printf("server: failed to add job.\n");
+            if(pthread_sigmask(SIG_UNBLOCK, &unblock_mask, NULL) < 0)
+                    printf("server: FAILED sigblock\n");
         }
-		else if(strcmp(argv[0], "jobs") == 0)
-		{
-			// Jobs
-			// List running jobs
-			// TODO: Currently only server side, needs to send
-			//		 list to client.
-			printf("server: listing jobs...\n");
-			listjobs(job_list, NULL);
-		}
-		else if(strcmp(argv[0], "shutdown") == 0)
-		{
-			// Shutdown
-			// Tells the server to shutdown
-			exit(0);
-		}
+        else if(strcmp(argv[0], "jobs") == 0)
+        {
+            // Jobs
+            // List running jobs
+            // TODO: Currently only server side, needs to send
+            //       list to client.
+            printf("server: listing jobs...\n");
+            listjobs(job_list, NULL);
+        }
+        else if(strcmp(argv[0], "shutdown") == 0)
+        {
+            // Shutdown
+            // Tells the server to shutdown
+            exit(0);
+        }
         else
         {
-			// Unknown Command
+            // Unknown Command
             printf("server: unknown command.\n");   
         }
     }
 
-	printf("Closing connection - freed %u\n", new_fd);
+    printf("Closing connection - freed %u\n", new_fd);
     close(new_fd);
-	free(args);
-	return 0;
+    free(args);
+    return 0;
 }
 
 // Get socket address in IPv4 or IPv6:
@@ -357,16 +357,16 @@ void *get_in_addr(struct sockaddr *sa)
 // Parent handles job lsit from here
 void sigchld_handler(int s)
 {
-	int status;
-	pid_t pid;
+    int status;
+    pid_t pid;
     printf("server: sigchld called\n");
     
-	while((pid = waitpid(-1, &status, WNOHANG)) > 0)
-	{
-		printf("server removing job pid=%d\n", pid);
-		// Delete job if terminated
-		if(WIFEXITED(status) || WIFSIGNALED(status))
-			deletejob(job_list, pid);
-	}
+    while((pid = waitpid(-1, &status, WNOHANG)) > 0)
+    {
+        printf("server removing job pid=%d\n", pid);
+        // Delete job if terminated
+        if(WIFEXITED(status) || WIFSIGNALED(status))
+            deletejob(job_list, pid);
+    }
 }
 
