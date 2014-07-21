@@ -11,7 +11,7 @@ CC = /usr/bin/gcc
 CCFLAG = -Wall -g -Werror
 
 server: server.c 
-	$(CC) $(CCFLAG) -pthread -o server server.c
+	$(CC) $(CCFLAG) -pthread -o server server.c jobs.h jobs.c
 
 jobs:
 	gcc -o jobs jobs.c jobs.h

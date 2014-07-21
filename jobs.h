@@ -8,15 +8,17 @@
  */
 
 #include <sys/types.h>
+#include <string.h>
+#include <stdio.h>
 
-#define MAXJOBS 10
-#define MAXLINE 256
+#define MAXJOBS 	10
+#define MAXJDESC 	256
 
 struct job_t
 {
-    pid_t pid;                 /* job PID */
-    int jid;                   /* job ID [1, 2, ...] */
-    char description[MAXLINE]; /* job description */ 
+    pid_t pid;                  /* job PID */
+    int jid;                    /* job ID [1, 2, ...] */
+    char description[MAXJDESC]; /* job description */ 
 };
 
 /* Job list manipulation */
@@ -26,6 +28,6 @@ void initjobs (struct job_t *job_list);
 int maxjid (struct job_t *job_list);
 int addjob (struct job_t *job_list, pid_t pid, char* description);
 int deletejob (struct job_t *job_list, pid_t pid);
-int pid2jid (pid_t pid);
-struct job_t* getjobpid(struct job_t *job_list, pid_t pid);
-struct job_t* getjobjid(struct job_t *job_list, int jid);
+// int pid2jid (pid_t pid);
+// struct job_t* getjobpid(struct job_t *job_list, pid_t pid);
+// struct job_t* getjobjid(struct job_t *job_list, int jid);

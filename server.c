@@ -18,6 +18,8 @@ server.c: stream socket echo server.
 #include <netdb.h>
 #include <signal.h>
 #include <pthread.h>
+#include "jobs.h"
+
 
 #define PORT        	"2525"
 #define BACKLOG     	5
@@ -31,6 +33,9 @@ struct run_args
 	int	  new_fd;						/* client socket  */
 };
 
+// Job List
+struct job_t job_list[MAXJOBS];
+
 // Functions
 void sigchld_handler(int s);
 void *get_in_addr(struct sockaddr *sa);
@@ -43,12 +48,14 @@ int main()
     struct addrinfo hints, *servinfo, *p;
 
     // connectors information
-    struct sigaction sa;
     struct sockaddr_storage their_addr;
     socklen_t sin_size;
     char s[INET6_ADDRSTRLEN];
     int rv;
     int yes=1;
+	
+	struct sigaction sa;
+	sigset_t full_mask;
 
     // generate address hint
     memset(&hints, 0, sizeof hints);
@@ -110,14 +117,23 @@ int main()
         perror("listen");
         exit(1);
     }
-
-    sa.sa_handler = sigchld_handler; // reap all dead processes
+	
+	// sigchld handler
     sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART;
+    sa.sa_handler = sigchld_handler;
+	sa.sa_flags = SA_RESTART;
     if (sigaction(SIGCHLD, &sa, NULL) == -1) {
         perror("sigaction");
         exit(1);
     }
+
+	// Block all signals
+	sigfillset(&full_mask);
+	pthread_sigmask(SIG_SETMASK, &full_mask, NULL);
+	
+	// job list
+	printf("server: preparing job list...\n");
+	initjobs(job_list);
 
     printf("server: waiting for connections... \n");
 
@@ -176,17 +192,29 @@ void *run(void* args)
 	char* s = ((struct run_args*) args)->command;
 	int new_fd = (((struct run_args*) args)->new_fd);
 
-    int n;
+    int n, pid;
     int cont;
     char* parse;
     char buf[BUFFER_SIZE];
 	
+	sigset_t unblock_mask;
+
 	int argc; // argument count (#args + NULL + 1)
 	char* argv[MAX_ARGUMENTS]; // arguments
+	
+	// Initialize sigmasks
+	if(sigemptyset(&unblock_mask) < 0) exit(1);
+	if(sigaddset(&unblock_mask, SIGCHLD) < 0) exit(1);	
+	if(sigaddset(&unblock_mask, SIGINT) < 0) exit(1);
+	
+	// Unblock Signals blocked by main thread
+	if(pthread_sigmask(SIG_UNBLOCK, &unblock_mask, NULL) < 0)
+		printf("server: FAILED sigblock\n");
+
 
     printf("server: got connection from %s on socket %u.\n", s, new_fd);
     if (send(new_fd, "Welcome! Type 'exit' to terminate connection.\n", 46, 0) == -1) perror("send");
-    
+
     /* Read Commands */
     cont = 1;
     while(cont != 0)
@@ -233,10 +261,13 @@ void *run(void* args)
 		else
 		{
 			// Clean last argument, removes "\r\n" at end
+			// Telnet adds those two
 			argv[argc-2][strlen(argv[argc-2])-2] = '\0'; 
 		}
-		// Translate Command 
-        // single word instructions must end in \r\n, see exit 
+		
+		/**********************************************
+		 * Translate Command 
+		 **********************************************/
 		if(strcmp(argv[0], "exit") == 0) 
         {        
 			// Exit
@@ -258,10 +289,19 @@ void *run(void* args)
 		}
         else if ((strcmp(argv[0], "exec") == 0) && (argc > 1))
         {
+			// Block SIGCHLD to prevent job_list race condition
+			if(pthread_sigmask(SIG_BLOCK, &unblock_mask, NULL) < 0)
+				printf("server: FAILED sigblock\n");
+
 			//Exec - No pipe between parent and child
-			if(!fork())
+			if(!(pid = fork()))
             {
-            	close(new_fd); // program won't need this
+				// Child
+				
+				if(pthread_sigmask(SIG_UNBLOCK, &unblock_mask, NULL) < 0)
+					printf("server: FAILED sigblock\n");
+
+				close(new_fd); // program won't need this
 				free(args); // child won't need this
 				if(execv("/bin/python", argv) < 0)
                 {
@@ -269,7 +309,28 @@ void *run(void* args)
                         exit(1);
                 }
 			}
+			// Parent - Adds child to job list
+			// assert: argc > 1
+			if(addjob(job_list, pid, argv[1]) == 0)	
+				printf("server: failed to add job.\n");
+			if(pthread_sigmask(SIG_UNBLOCK, &unblock_mask, NULL) < 0)
+					printf("server: FAILED sigblock\n");
         }
+		else if(strcmp(argv[0], "jobs") == 0)
+		{
+			// Jobs
+			// List running jobs
+			// TODO: Currently only server side, needs to send
+			//		 list to client.
+			printf("server: listing jobs...\n");
+			listjobs(job_list, NULL);
+		}
+		else if(strcmp(argv[0], "shutdown") == 0)
+		{
+			// Shutdown
+			// Tells the server to shutdown
+			exit(0);
+		}
         else
         {
 			// Unknown Command
@@ -293,9 +354,19 @@ void *get_in_addr(struct sockaddr *sa)
 }
 
 // Reap zombies
+// Parent handles job lsit from here
 void sigchld_handler(int s)
 {
+	int status;
+	pid_t pid;
     printf("server: sigchld called\n");
-    while(waitpid(-1, NULL, WNOHANG) > 0);
+    
+	while((pid = waitpid(-1, &status, WNOHANG)) > 0)
+	{
+		printf("server removing job pid=%d\n", pid);
+		// Delete job if terminated
+		if(WIFEXITED(status) || WIFSIGNALED(status))
+			deletejob(job_list, pid);
+	}
 }
 
