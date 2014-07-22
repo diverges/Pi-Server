@@ -6,7 +6,7 @@
 ###############################################################################
 
 Last Modified:
-	July 20, 2014
+	July 21, 2014
 
 server: server.c 
 	Listens on port #2525 for a connection, acts like a shell between the 
