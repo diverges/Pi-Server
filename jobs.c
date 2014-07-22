@@ -107,8 +107,6 @@ int addjob(struct job_t* job_list, pid_t pid, char* description)
     {
         if(job_list[i].pid == 0)
         {
-            printf("jlist: Adding Job [%d] (%d) %s\n", pid, nextjid,
-                description);
             job_list[i].pid = pid;
             job_list[i].jid = nextjid++;
             strcpy(job_list[i].description, description);
@@ -138,8 +136,6 @@ int deletejob(struct job_t *job_list, pid_t pid)
     {
         if(job_list[i].pid == pid)
         {
-            printf("jlist: Removing Job [%d] (%d) %s\n", pid, 
-                job_list[i].jid, job_list[i].description);
             clearjob(&job_list[i]);
             nextjid = maxjid(job_list)+1;
             return 1;

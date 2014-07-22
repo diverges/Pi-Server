@@ -192,11 +192,12 @@ void *run(void* args)
     char* s = ((struct run_args*) args)->command;
     int new_fd = (((struct run_args*) args)->new_fd);
 
-    int n, pid;
+    int n;
     int cont;
     char* parse;
     char buf[BUFFER_SIZE];
     
+    pid_t pid;
     sigset_t unblock_mask;
 
     int argc; // argument count (#args + NULL + 1)
@@ -325,11 +326,23 @@ void *run(void* args)
             printf("server: listing jobs...\n");
             listjobs(job_list, NULL);
         }
+        else if((strcmp(argv[0], "kill") == 0) && (argc > 1))
+        {
+            // Kill <PID>
+            // Send SIGINT to process with pid PID
+            if((pid = atoi(argv[1])) == 0) perror("kill");
+            printf("server: killing pid=%d\n", pid);
+            if(pid) kill(pid, SIGINT);
+        }
         else if(strcmp(argv[0], "shutdown") == 0)
         {
             // Shutdown
             // Tells the server to shutdown
-            exit(0);
+
+            if(maxjid(job_list) != 0)
+                printf("server: cannot shutdown, job(s) running\n");
+            else
+                exit(0);
         }
         else
         {
