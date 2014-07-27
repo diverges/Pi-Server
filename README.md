@@ -2,7 +2,7 @@
 
 Basic server designed to manage python application on a Raspberry Pi. Meant to allow client applications on same network to initiate various programs on the Pi. Listens on port 2525.
 
-Author: Miguel Sotolongo (diverges)  
+**Author:** Miguel Sotolongo (diverges)  
 
 ## Commands
 - **exit:** terminate client connection
@@ -32,4 +32,4 @@ jobs
 shutdown
 ```
 
-** Server should be shutdown from client application. **
+**Server should be shutdown from client application.**
