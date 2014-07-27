@@ -42,21 +42,51 @@ int main()
  ***********************************************/
 
 // listjobs
-// Prints Job List to STDOUT
-void listjobs(struct job_t *job_list, char* buf)
+// Prints Job List to STDOUT and buf
+void listjobs(struct job_t *job_list, char* buf, int buf_size)
 {
     int i;
-    
-    //if(buf != NULL);
-    //    memset(buf, '\0', MAXJDESC);
+    int length;
+    char jid[10];
+    char pid[10];
+
+    if(buf_size < 64)
+        return;
+
+    memset(buf, '\0', buf_size);
 
     printf("-- Jobs [JID] (PID) \n");
+    strncat(buf, "-- Jobs [JID] (PID) \n", 21);
+    length = 21; // track length of returned string
+
     for(i = 0; i < MAXJOBS; i++)
     {
         if(job_list[i].pid != 0)
         {
             printf("\t[%d] (%d) %s\n", 
                 job_list[i].jid, job_list[i].pid, job_list[i].description);
+
+            sprintf(jid, "%d", job_list[i].jid);
+            sprintf(pid, "%d", job_list[i].pid);
+
+            length += strlen(pid) + strlen(jid) 
+                + strlen(job_list[i].description) + 8; 
+
+            if(length > buf_size)
+            {
+                printf("server: buffer too small\n");
+                memcpy(buf, "Buffer too small\n\0", 18);
+            }
+            else
+            {
+                strncat(buf, "\t[", 2);
+                strcat(buf, jid);
+                strncat(buf, "] (", 3);
+                strcat(buf, pid);
+                strncat(buf, ") ", 2);
+                strcat(buf, job_list[i].description);
+                strncat(buf, "\n",1);
+            }
         }
     }
 }
@@ -67,7 +97,7 @@ void clearjob(struct job_t *job)
 {
     job->pid = 0;
     job->jid = 0;
-    job->description[0] = '\0';
+    memset(&job->description, '\0', MAXJDESC);
 }
 
 // initjobs

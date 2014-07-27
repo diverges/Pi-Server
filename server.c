@@ -1,8 +1,12 @@
 /*
- 
-server.c: stream socket echo server.
-
-*/
+ *  Pi Server:
+ *    
+ *  Basic server designed to manage python application
+ *  on a Raspberry Pi (not limited to). Meant to allow
+ *  client applications on same network to initiate 
+ *  various programs.
+ *
+ */
 
 #include <arpa/inet.h>
 #include <stdio.h>
@@ -23,7 +27,7 @@ server.c: stream socket echo server.
 
 #define PORT            "2525"
 #define BACKLOG         5
-#define BUFFER_SIZE     128
+#define BUFFER_SIZE     1024
 #define MAX_ARGUMENTS   10
 
 // Thread Argument Struct
@@ -40,6 +44,7 @@ struct job_t job_list[MAXJOBS];
 void sigchld_handler(int s);
 void *get_in_addr(struct sockaddr *sa);
 void *run(void* args);
+int  swrite(int fd, char*buf, int length);  
 
 int main()
 {
@@ -108,6 +113,13 @@ int main()
         fprintf(stderr, "server: failed to bind\n");
         return 2;
     }
+
+    inet_ntop(AF_INET, 
+                p->ai_addr,
+                s, sizeof s);
+
+    //To-Do FIX
+    printf("server: (INCORRECT) address %s\n", s);
     
     freeaddrinfo(servinfo);
 
@@ -214,14 +226,17 @@ void *run(void* args)
 
 
     printf("server: got connection from %s on socket %u.\n", s, new_fd);
-    if (send(new_fd, "Welcome! Type 'exit' to terminate connection.\n", 46, 0) == -1) perror("send");
+    if (swrite(
+        new_fd, 
+        "Welcome! Type 'exit' to terminate connection or 'shutdown' to close the server.\n", 
+        80)) perror("send: bad");
 
     /* Read Commands */
     cont = 1;
     while(cont != 0)
     {
         // clear buff
-        memset(&buf, '\0', sizeof buf);
+        memset(buf, '\0', BUFFER_SIZE);
         
         // Read Input - TODO: Read until no input left?
         if((n = read(new_fd, buf, BUFFER_SIZE)) < 0) perror("read"); 
@@ -282,11 +297,11 @@ void *run(void* args)
             printf("server: sending (%s)", s);
             for(n = 1; n < argc-1; n++)
             {
-                if(((write(new_fd, argv[n], strlen(argv[n]))) < 0) ||
-                    (write(new_fd, " ", 1) < 0))    
+                if(swrite(new_fd, argv[n], strlen(argv[n])) || 
+                   swrite(new_fd, " ", 1))    
                     perror("write");
             }
-            if(write(new_fd, "\n", 1) < 0) perror("write");
+            if(swrite(new_fd, "\n", 1) < 0) perror("write");
         }
         else if ((strcmp(argv[0], "exec") == 0) && (argc > 1))
         {
@@ -306,8 +321,8 @@ void *run(void* args)
                 free(args); // child won't need this
                 if(execv("/bin/python", argv) < 0)
                 {
-                        perror("execlp");
-                        exit(1);
+                    perror("execlp");
+                    exit(1);
                 }
             }
             // Parent - Adds child to job list
@@ -315,7 +330,7 @@ void *run(void* args)
             if(addjob(job_list, pid, argv[1]) == 0) 
                 printf("server: failed to add job.\n");
             if(pthread_sigmask(SIG_UNBLOCK, &unblock_mask, NULL) < 0)
-                    printf("server: FAILED sigblock\n");
+                printf("server: FAILED sigblock\n");
         }
         else if(strcmp(argv[0], "jobs") == 0)
         {
@@ -323,8 +338,9 @@ void *run(void* args)
             // List running jobs
             // TODO: Currently only server side, needs to send
             //       list to client.
-            printf("server: listing jobs...\n");
-            listjobs(job_list, NULL);
+            printf("server: listing jobs\n");
+            listjobs(job_list, buf, BUFFER_SIZE);
+            swrite(new_fd, buf, strlen(buf));
         }
         else if((strcmp(argv[0], "kill") == 0) && (argc > 1))
         {
@@ -366,6 +382,23 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
+// Sends a message to client
+// fd: client fd
+// buf: message to be sent
+// length: characters to write
+int  swrite(int fd, char* buf, int length)
+{
+    int n = 1;
+
+    while((length > 0) && (n > 0))
+    {
+        n = send(fd, buf, length, 0);
+        length -= n;
+    }
+
+    return (n < 0) ? 1 : 0;
+}
+
 // Reap zombies
 // Parent handles job lsit from here
 void sigchld_handler(int s)
@@ -382,4 +415,3 @@ void sigchld_handler(int s)
             deletejob(job_list, pid);
     }
 }
-
